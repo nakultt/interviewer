@@ -17,6 +17,44 @@ A resume-aware autonomous mock interviewer for Apple Silicon. Next.js is only th
 
 The browser only captures device media. Python analyzes audio and sampled camera frames. Integrity observations are stored separately from technical scores: gaze, posture, appearance, and accent never lower answer-quality scores.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser["Next.js UI (src/)"]
+        IC[interview-console.tsx<br/>resume upload · controls · transcript]
+        MIC[mic → pcm-worklet.js<br/>PCM frames]
+        CAM[camera → sampled frames]
+        PB[speech playback]
+    end
+
+    MIC & CAM -->|full-duplex WebSocket| RT
+    IC -->|REST| API
+
+    subgraph PY["Python runtime (backend/kec_runtime)"]
+        API[interview_api.py<br/>resume · interview · monitoring · report]
+        RT[realtime.py<br/>WebSocket sideband]
+        RS[resume.py<br/>text + skills extraction]
+        VAD[vad.py<br/>Silero VAD · endpointing]
+        STT[stt.py<br/>Whisper Large V3 Turbo]
+        AG[agent.py + interviewer.py<br/>question selection · follow-ups ·<br/>evaluation]
+        TTS[tts.py<br/>Kokoro 82M]
+        VIS[vision.py<br/>MediaPipe face · iris · pose<br/>isolated worker]
+        VOX[voice.py<br/>ECAPA-TDNN speaker verification]
+        ST[store.py / repository.py]
+        RT --> VAD --> STT --> AG
+        RT --> VIS
+        RT --> VOX
+        API --> RS --> AG
+        AG --> TTS --> PB
+    end
+
+    AG <-->|OpenAI-compatible API| LMS[(LM Studio<br/>local Qwen)]
+    ST --> DB[(MongoDB Atlas<br/>interviews · reports)]
+    AG --> ST
+    VIS & VOX -->|integrity observations<br/>kept separate from scores| ST
+```
+
 ## Prerequisites
 
 - Bun 1.3+
